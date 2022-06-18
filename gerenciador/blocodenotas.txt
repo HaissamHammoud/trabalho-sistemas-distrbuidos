@@ -1,0 +1,2 @@
+1 - Seletor se integra no gerenciador com o enpoint 
+    /seletor/<string:nome>/<string:ip>
