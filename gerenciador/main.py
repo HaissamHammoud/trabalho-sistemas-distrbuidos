@@ -51,6 +51,9 @@ class Transacao(db.Model):
     horario = db.Column(db.DateTime, unique=False, nullable=False)
     status = db.Column(db.Integer, unique=False, nullable=False)
 
+    def __repr__(self):
+        return f"{{id : {self.id}, remetente: {self.remetente} }}, recebedor: {self.recebedor}, valor:{self.valor},horario: {self.horario}, status: {self.status} }} "
+
 @app.before_first_request
 def create_tables():
     db.create_all()
@@ -122,7 +125,7 @@ def ApagarSeletor(id):
 def horario():
     if(request.method == 'GET'):
         objeto = datetime.now()
-        return jsonify(objeto)
+        return jsonify({"tempo":objeto.strftime("%m/%d/%Y, %H:%M:%S")})
 
 @app.route('/transacoes', methods = ['GET'])
 def ListarTransacoes():

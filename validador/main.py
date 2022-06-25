@@ -1,4 +1,4 @@
-from flask import Flask, redirect , render_template, request
+from flask import Flask, redirect , render_template, request,jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from  random import randint
@@ -7,11 +7,10 @@ import time
 import requests
 from logger import *
 
-initLogger()
 app = Flask(__name__)
 
 #indica o tempo de inicialização da instância
-
+initLogger()
 log("Iniciando a instancia")
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///teste2.db'
 sessao = "validador-" + (datetime.now().strftime("%Y-%m-%d-%H-%M-%S"))  
@@ -49,19 +48,6 @@ def create_tables():
 #     # abre um arquivo de log caso necessario
 #     # escreve a string de mensagem no formato "%Y-%m-%d-%H-%M-%S nivel mensagem
 
-def getHora():
-    #retorna a hora do sistema do gerenciador
-    url = "http://localhost:5000/hora"
-    hora = request.get(url)
-    return hora
-
-def validarHorario(horarioTransacao):
-    horario = getHora()
-    if horario > horarioTransacao:
-        return 0
-    else:
-        return 1
-
 
 class Usuario(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -71,18 +57,42 @@ class Usuario(db.Model):
     def __repr__(self):
         return f"{{Nome : {self.nome}, Saldo: {self.saldo} }}"
 
+def getHora():
+    #retorna a hora do sistema do gerenciador
+    url = "http://localhost:5000/hora"
+    hora = requests.get(url)
+    timeObject = hora.json()["tempo"]
+    result = datetime.strptime(timeObject, "%m/%d/%Y, %H:%M:%S")
+    log(f"tempo so servidor atualizado {result}: ")
+    return result
+
+def validarHorario(horarioTransacao):
+    horario = getHora()
+    if horario > datetime.strptime(horarioTransacao, "%m/%d/%Y, %H:%M:%S"):
+        return 0
+    else:
+        return 1
+
+
+def banirUsuario(motivo, transacao):
+    id_usuario = transacao["id_usuario"]
+    id_transacao = transacao["id_transacao"]
+    horario = transacao["horario"]
+    ## Essa função devera banir o usuario dependendo da infracao cometida
+    log(f"Tempo passado pelo usuario de id {id_usuario} para transacao {id_transacao} e invalido","WARN")
+    log(f"Usuario de id: {id_usuario} banido por: 20 sec","WARN")
+    return motivo
+
+def aprovarTransacao(transacao):
+    id_usuario = transacao["id_usuario"]
+    id_transacao = transacao["id_transacao"]
+    horario = transacao["horario"]
+    ## Essa função devera banir o usuario dependendo da infracao cometida
+    log(f"Usuario {id_usuario} teve a transacao {id_transacao} aprovada")
 
 @app.route('/validar', methods=['POST'])
 def validar():
-
     """
-        Json que vira no body da função será
-        {
-            horario : datetime,
-            valor   : decimal,
-            id_usuario : int
-        }
-
     1 - Verifica se o tempo da transação é valida
     2 - Verifica se o saldo do consumidor é o suficiente (faz a requisição para o gerenciador)
     3 - Verifica se o consumidor contem uma transação ao menor 4 transações com o status
@@ -96,13 +106,18 @@ def validar():
     4 - toma as decições necessarias dependendo do resultado
 """
     request_data = request.get_json()
-    key = request_data['key']
-    login = request_data['name']
+    horario = request_data['horario']
     valor = request_data['valor']
-    print(login + str(valor) + login)
-    if key == login + str(valor) + login:
-        return {"status": "valid"}
-    return {"status":"invalid"}
+    id_usuario = request_data['id_usuario']
+    log(f"validar: Usuario de id {id_usuario} valor: {valor}")
+    isValidTime = validarHorario(horario)
+
+    if isValidTime == 0:
+        banirUsuario("Tempo unvalido",request_data)
+        return jsonify(['"status": "403, "message": "horario invalido"'])
+
+    aprovarTransacao(request_data)
+    return {"status":"valid"}
 
 if __name__ == '__main__':
     app.run(debug=True, port=5001)
