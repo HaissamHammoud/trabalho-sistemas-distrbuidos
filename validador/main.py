@@ -7,6 +7,11 @@ import time
 import requests
 from logger import *
 
+URL_GERENCIADOR ="http://localhost:5000"
+URL_SELETOR  = "http://localhost:5001"
+SECRET_TO_SELETOR= ""
+HOST = "127.0.0.1"
+PORT = 5019
 app = Flask(__name__)
 
 #indica o tempo de inicialização da instância
@@ -17,22 +22,36 @@ sessao = "validador-" + (datetime.now().strftime("%Y-%m-%d-%H-%M-%S"))
 log("Conectando ao banco de dados")
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)
-log("Conectando ao gerenciador")
-url = "http://localhost:5000/seletor/validadorjh/127.0.0.1"
-# x = requests.post(url, json = "")
+url = URL_SELETOR 
 
-def connectToGerenciador(url, numberOfTry=0, maxRetry = 3):
+def connectToSeletor(url, numberOfTry=0, maxRetry = 3):
+    url_to_seletor = HOST+":"+str(PORT)
+    log(f"url to servidor = {url_to_seletor}")
+    request_obj = {'ip': HOST+":"+str(PORT)}
+    request_url = url + "/validador"
     try:
-        x = requests.post(url, json = "")
+        x = requests.post(request_url, json = request_obj )
+        print("mensagemseletor:", x.content)
+        log(x.content)
+        content_json = x.json()
+        # SECRET_TO_SELETOR = x.content["secret"]
+        log("status")
+        print(content_json["status"])
+        if content_json["status"] == "200":
+            log("Conectado ao seletor com sucesso")
+            SECRET_TO_SELETOR = content_json["secret"]
+        else:
+            SECRET_TO_SELETOR = content_json["secret"]
+            return 1
     except:
         if numberOfTry*5 >= maxRetry * 5:
             log( f"nao foi possivel se conectar ao gerenciador, numero de tentativas: {numberOfTry}","ERROR")
         else:
             time.sleep(5 * numberOfTry)
             log("Não foi possivel conectar ao servidor, tentando conectar novamente")
-            connectToGerenciador(url, numberOfTry+1)
+            connectToSeletor(url, numberOfTry+1)
 
-connectToGerenciador(url)
+connectToSeletor(URL_SELETOR)
 
 @app.before_first_request
 def create_tables():
@@ -59,7 +78,7 @@ class Usuario(db.Model):
 
 def getHora():
     #retorna a hora do sistema do gerenciador
-    url = "http://localhost:5000/hora"
+    url = URL_GERENCIADOR + "/hora"
     hora = requests.get(url)
     timeObject = hora.json()["tempo"]
     result = datetime.strptime(timeObject, "%m/%d/%Y, %H:%M:%S")
@@ -120,4 +139,4 @@ def validar():
     return {"status":"valid"}
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5001)
+    app.run(debug=True, port=PORT)

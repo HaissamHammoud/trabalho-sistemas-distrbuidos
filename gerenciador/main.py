@@ -6,6 +6,7 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from dataclasses import dataclass
 from datetime import date, datetime
+import requests
   
 app = Flask(__name__)
 
@@ -161,6 +162,7 @@ def EditaTransacao(id, status):
             objeto.id = id
             objeto.status = status
             db.session.commit()
+            requests.post()
             return jsonify(objeto)
         except Exception as e:
             data={
