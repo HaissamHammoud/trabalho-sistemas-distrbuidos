@@ -85,12 +85,34 @@ def getHora():
     log(f"tempo so servidor atualizado {result}: ")
     return result
 
-def validarHorario(horarioTransacao):
+def horarioValido(horarioTransacao):
     horario = getHora()
     if horario > datetime.strptime(horarioTransacao, "%m/%d/%Y, %H:%M:%S"):
-        return 0
+        return True
     else:
-        return 1
+        return False
+
+def saldoValido(valorTransacao, idUsuario):
+    endpoint = URL_GERENCIADOR + f"/clientes/{idUsuario}"
+    response = requests.get(endpoint)
+    response_json = response.json()
+    saldo = response_json["qtdMoeda"]
+    if valorTransacao > saldo:
+        return False
+    else:
+        return True
+
+def comportamentoValido(id_usuario):
+        endpoint = URL_GERENCIADOR + f"/transacoes"
+        respose = requests.get(endpoint)
+        response_json = response.json()
+        tempo = datetime.now() - timedelta(minutes=5)
+        transacoes_usuario = [x for transacoes in response_json if transacoes["remetende"] == id_usuario and transacoes["horario"] > tempo ]
+        transacoes_status = [ x for transacoes in transacoes_usuario if transacoes["status"] != 1]
+        if transacoes_status.count() >= 4 :
+            return False
+        else:
+            return True
 
 
 def banirUsuario(motivo, transacao):
@@ -109,34 +131,27 @@ def aprovarTransacao(transacao):
     ## Essa função devera banir o usuario dependendo da infracao cometida
     log(f"Usuario {id_usuario} teve a transacao {id_transacao} aprovada")
 
+def 
 @app.route('/validar', methods=['POST'])
 def validar():
-    """
-    1 - Verifica se o tempo da transação é valida
-    2 - Verifica se o saldo do consumidor é o suficiente (faz a requisição para o gerenciador)
-    3 - Verifica se o consumidor contem uma transação ao menor 4 transações com o status
-        0 ou 2 dentro de 5 minutos caso isso aconteça deve bloquear o usuario usando tabela
-        ou logs
 
-    X - No retorno deve retornar uma chave recebida pelo seletor no cadastro
-    
-    2 - envia as transações para s validadores validarem
-    3 - verifica se todos entregaram a resposta correta
-    4 - toma as decições necessarias dependendo do resultado
-"""
     request_data = request.get_json()
     horario = request_data['horario']
     valor = request_data['valor']
     id_usuario = request_data['id_usuario']
     log(f"validar: Usuario de id {id_usuario} valor: {valor}")
-    isValidTime = validarHorario(horario)
-
-    if isValidTime == 0:
+    if not saldoValido(valor, id_usuario):
+        return jsonify(['"status": "403, "message": "Saldo insuficiente","status_transacao": "2"']) 
+    isValidTime = horarioValido(horario)
+    if not horarioValido(horario):
         banirUsuario("Tempo unvalido",request_data)
-        return jsonify(['"status": "403, "message": "horario invalido"'])
+        return jsonify(['"status": "403, "message": "horario invalido", "status_transacao": "2"'])
+    if not comportamentoValido(id_usuario):
+        banirUsuario("Tempo unvalido",request_data)
+        return jsonify(['"status": "403, "message": "comportamento suspeito", "status_transacao": "2"'])
 
     aprovarTransacao(request_data)
-    return {"status":"valid"}
+    return jsonify([f'"status": "200", "status_transacao": "1", "segredo": "{SECRET_TO_SELETOR}"'])
 
 if __name__ == '__main__':
     app.run(debug=True, port=PORT)
