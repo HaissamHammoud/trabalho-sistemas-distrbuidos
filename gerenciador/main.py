@@ -18,7 +18,7 @@ migrate = Migrate(app, db)
 class Cliente(db.Model):
     id: int
     nome: str
-    senha: int
+    senha: str
     qtdMoeda: int
     
     id = db.Column(db.Integer, primary_key=True)
@@ -83,7 +83,7 @@ def InserirSeletor(nome, ip):
 def UmSeletor(id):
     if(request.method == 'GET'):
         produto = Seletor.query.get(id)
-        return jsonify(produto)
+        return jsonify((produto))
     else:
         return jsonify(['Method Not Allowed'])
 
@@ -172,9 +172,39 @@ def EditaTransacao(id, status):
     else:
         return jsonify(['Method Not Allowed'])
 
+@app.route('/clientes', methods = ['GET'])
+def ListarClientes():
+    if(request.method == 'GET'):
+        clientes = Cliente.query.all()
+        return jsonify(str(clientes))
+
+@app.route('/clientes/<int:id>', methods=["GET"])
+def UmCliente(id):
+    if(request.method == 'GET'):
+        objeto = Cliente.query.get(id)
+        return jsonify(str(objeto))
+    else:
+        return jsonify(['Method Not Allowed'])
+
+#para teste
+@app.route('/addcliente', methods=["POST"])
+def addCliente():
+    if request.method=='POST':
+        request_data = request.get_json()
+        _nome = request_data['nome']
+        _senha = request_data['senha']
+        _qtdMoeda = request_data['qtdMoeda']
+        objeto = Cliente(nome=_nome, senha=_senha,qtdMoeda=_qtdMoeda)
+        db.session.add(objeto)
+        db.session.commit()
+        return {"status": "ok", "message": "Usuario criado com sucesso"}
+    else:
+        return jsonify(['Method Not Allowed'])
+
+
 @app.errorhandler(404)
 def page_not_found(error):
     return render_template('page_not_found.html'), 404
 
 if __name__ == "__main__":
-    app.run(host='0.0.0.0', debug=True)
+    app.run(host='0.0.0.0')
