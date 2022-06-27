@@ -40,18 +40,6 @@ class Validador(db.Model):
     def __repr__(self):
         return f"{{ ip: {ip}, stack: {stack } }}" 
 
-
-
-# @app.route('/createuser', methods=['POST'])
-# def createUser():
-#     request_data = request.get_json()
-#     _nome = request_data['nome']
-#     _saldo = request_data['valor']
-#     usuario = Usuario(nome = _nome, saldo=_saldo)
-#     db.session.add(usuario)
-#     db.session.commit()
-#     return {"status": "ok", "message": "Usuario criado com sucesso"}
-
 @app.route('/validador', methods=['POST'])
 def createValidador():
     request_data = request.get_json()
@@ -70,15 +58,6 @@ def createValidador():
             return {"status": "400"}
 
     return {"status": "200", "secret": "segredosecreto", "Message": "Validador registrado com sucesso"}
-
-# @app.route('/updateuser/<int:_id>', methods=['PUT'])
-# def updateUser(_id):
-#     request_data = request.get_json()
-#     _nome = request_data['nome']
-#     _saldo = request_data['valor']
-#     num_rows_updated = Usuario.query.filter_by(id=_id).update(dict(nome=_nome, saldo=_saldo))
-#     db.session.commit()
-#     return {"status": "200", "message": "usuario atualizado com sucesso"}
 
 @app.route('/delete/<int:_id>', methods=['DELETE'])
 def deleteUser(_id):
@@ -103,25 +82,15 @@ def elect(names, number_values):
     value = randint(0, number_values-1)
     return value
 
-#talvez não precise mais
-# @app.route('/eleger', methods=['PUT'])
-# def eleger():
-#     usuarios = Usuario.query.all()
-#     size = len(usuarios)
-#     elected = elect(usuarios, size)
-#     print(usuarios[elected])
-#     return str(usuarios[elected]) 
-
-
 @app.route('/validar', methods=['POST'])
 def validar():
     # 0 - Formata os dados d transacao
     request_data = request.get_json()
     obj = {
-        id_usuario = request_data['remetente']
-        valor = request_data['valor']
-        status = request_data['status']
-        id_transacao = request_data["id"]
+        id_usuario : request_data['remetente'],
+        valor : request_data['valor'],
+        status : request_data['status'],
+        id_transacao : request_data["id"],
     }
 
     # 1 - Busca os validadores disponives
@@ -135,7 +104,7 @@ def validar():
         respostas.append(resposta)
     # 4 - Verifica se o token retornado é o token gerado na criacao
     for resp in respostas:
-        if resp["segredo"] != f"{SECRET}"
+        if resp["segredo"] != f"{SECRET}":
             return {"status":"2"}
 
     # 4 - Retorna as informações para o gerenciador

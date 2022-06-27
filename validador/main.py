@@ -131,7 +131,6 @@ def aprovarTransacao(transacao):
     ## Essa função devera banir o usuario dependendo da infracao cometida
     log(f"Usuario {id_usuario} teve a transacao {id_transacao} aprovada")
 
-def 
 @app.route('/validar', methods=['POST'])
 def validar():
 
