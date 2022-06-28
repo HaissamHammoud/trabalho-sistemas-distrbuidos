@@ -14,7 +14,6 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///site.db'
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)
 
-@dataclass
 class Cliente(db.Model):
     id: int
     nome: str
@@ -25,6 +24,9 @@ class Cliente(db.Model):
     nome = db.Column(db.String(20), unique=False, nullable=False)
     senha = db.Column(db.String(20), unique=False, nullable=False)
     qtdMoeda = db.Column(db.Integer, unique=False, nullable=False)
+    
+    def __repr__(self):
+        return f"{{Nome : {self.nome}, senha : {self.senha}, qtdMoeda: {self.qtdMoeda} }}"
 
 class Seletor(db.Model):
     id: int
@@ -53,7 +55,7 @@ class Transacao(db.Model):
     status = db.Column(db.Integer, unique=False, nullable=False)
 
     def __repr__(self):
-        return f"{{id : {self.id}, remetente: {self.remetente} }}, recebedor: {self.recebedor}, valor:{self.valor},horario: {self.horario}, status: {self.status} }} "
+        return f"{{id : {self.id}, remetente: {self.remetente}, recebedor: {self.recebedor}, valor:{self.valor},horario: {self.horario}, status: {self.status} }} "
 
 @app.before_first_request
 def create_tables():
@@ -132,7 +134,7 @@ def horario():
 def ListarTransacoes():
     if(request.method == 'GET'):
         transacoes = Transacao.query.all()
-        return jsonify(transacoes)
+        return jsonify(str(transacoes))
     
     
 @app.route('/transacoes/<int:rem>/<int:reb>/<int:valor>', methods = ['POST'])
@@ -141,7 +143,7 @@ def CriaTransacao(rem, reb, valor):
         objeto = Transacao(remetente=rem, recebedor=reb,valor=valor,status=0,horario=datetime.now())
         db.session.add(objeto)
         db.session.commit()
-        return jsonify(objeto)
+        return jsonify(str(objeto))
     else:
         return jsonify(['Method Not Allowed'])
 
@@ -149,7 +151,7 @@ def CriaTransacao(rem, reb, valor):
 def UmaTransacao(id):
     if(request.method == 'GET'):
         objeto = Transacao.query.get(id)
-        return jsonify(objeto)
+        return jsonify(str(objeto))
     else:
         return jsonify(['Method Not Allowed'])
 
@@ -162,8 +164,7 @@ def EditaTransacao(id, status):
             objeto.id = id
             objeto.status = status
             db.session.commit()
-            requests.post()
-            return jsonify(objeto)
+            return jsonify(str(objeto))
         except Exception as e:
             data={
                 "message": "transação não atualizada"
@@ -207,4 +208,5 @@ def page_not_found(error):
     return render_template('page_not_found.html'), 404
 
 if __name__ == "__main__":
+    db.create_all()
     app.run(host='0.0.0.0')

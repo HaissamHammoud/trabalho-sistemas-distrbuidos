@@ -2,7 +2,7 @@ from flask import Flask, redirect , render_template, request,jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from  random import randint
-from datetime import datetime
+from datetime import datetime, timedelta
 import time
 import requests
 from logger import *
@@ -57,17 +57,6 @@ connectToSeletor(URL_SELETOR)
 def create_tables():
     db.create_all()
 
-# def log(nivel, mensagem):
-#     time = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
-#     textoLog = f"{time} - {nivel} menssagem: {menssagem}"
-#     print(textLog)
-#     f = open(f"logs/{INSTANCE_TIME}_validador.txt", "a")
-#     f.write(textlog)
-#     f.close()
-#     # abre um arquivo de log caso necessario
-#     # escreve a string de mensagem no formato "%Y-%m-%d-%H-%M-%S nivel mensagem
-
-
 class Usuario(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     nome = db.Column(db.String(20), unique=False, nullable=False)
@@ -87,7 +76,9 @@ def getHora():
 
 def horarioValido(horarioTransacao):
     horario = getHora()
-    if horario > datetime.strptime(horarioTransacao, "%m/%d/%Y, %H:%M:%S"):
+    horarioTransacao = horarioTransacao[:horarioTransacao.rfind('.')]
+    horarioTransacao = datetime.strptime(horarioTransacao, "%Y-%m-%d %H:%M:%S")
+    if horario > horarioTransacao:
         return True
     else:
         return False
@@ -96,7 +87,7 @@ def saldoValido(valorTransacao, idUsuario):
     endpoint = URL_GERENCIADOR + f"/clientes/{idUsuario}"
     response = requests.get(endpoint)
     response_json = response.json()
-    saldo = response_json["qtdMoeda"]
+    saldo = int(response_json[response_json.find("qtdMoeda: ") + 10:-1])
     if valorTransacao > saldo:
         return False
     else:
@@ -104,12 +95,15 @@ def saldoValido(valorTransacao, idUsuario):
 
 def comportamentoValido(id_usuario):
         endpoint = URL_GERENCIADOR + f"/transacoes"
-        respose = requests.get(endpoint)
+        response = requests.get(endpoint)
         response_json = response.json()
         tempo = datetime.now() - timedelta(minutes=5)
-        transacoes_usuario = [x for transacoes in response_json if transacoes["remetende"] == id_usuario and transacoes["horario"] > tempo ]
-        transacoes_status = [ x for transacoes in transacoes_usuario if transacoes["status"] != 1]
-        if transacoes_status.count() >= 4 :
+        transacoes_usuario = 0
+        transacoes_status = 0
+        transacoes_usuario = [transacoes_usuario+1 for transacoes in response_json if transacoes["remetende"] == id_usuario and transacoes["horario"] > tempo ]
+        transacoes_status = [transacoes_status+1 for transacoes in transacoes_usuario if transacoes["status"] != 1]
+
+        if len(transacoes_status) >= 4 :
             return False
         else:
             return True
@@ -133,24 +127,23 @@ def aprovarTransacao(transacao):
 
 @app.route('/validar', methods=['POST'])
 def validar():
-
     request_data = request.get_json()
     horario = request_data['horario']
     valor = request_data['valor']
-    id_usuario = request_data['id_usuario']
+    id_usuario = request_data['remetente']
     log(f"validar: Usuario de id {id_usuario} valor: {valor}")
     if not saldoValido(valor, id_usuario):
+        banirUsuario("saldo invalido",request_data)
         return jsonify(['"status": "403, "message": "Saldo insuficiente","status_transacao": "2"']) 
-    isValidTime = horarioValido(horario)
     if not horarioValido(horario):
-        banirUsuario("Tempo unvalido",request_data)
+        banirUsuario("Tempo invalido",request_data)
         return jsonify(['"status": "403, "message": "horario invalido", "status_transacao": "2"'])
     if not comportamentoValido(id_usuario):
-        banirUsuario("Tempo unvalido",request_data)
+        banirUsuario("comportamento invalido",request_data)
         return jsonify(['"status": "403, "message": "comportamento suspeito", "status_transacao": "2"'])
 
     aprovarTransacao(request_data)
     return jsonify([f'"status": "200", "status_transacao": "1", "segredo": "{SECRET_TO_SELETOR}"'])
 
 if __name__ == '__main__':
-    app.run(debug=True, port=PORT)
+    app.run(port=PORT)

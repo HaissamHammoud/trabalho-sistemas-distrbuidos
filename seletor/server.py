@@ -1,9 +1,10 @@
-from flask import Flask, redirect , render_template, request
+from flask import Flask, jsonify, redirect , render_template, request
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from  random import randint
 from logger import *
 import requests
+import json
 app = Flask(__name__)
 
 SECRET = "sergredosecreto"
@@ -38,7 +39,7 @@ class Validador(db.Model):
     stack = db.Column(db.Float())
 
     def __repr__(self):
-        return f"{{ ip: {ip}, stack: {stack } }}" 
+        return f"{{ ip: {self.ip}, stack: {self.stack } }}"
 
 @app.route('/validador', methods=['POST'])
 def createValidador():
@@ -86,12 +87,6 @@ def elect(names, number_values):
 def validar():
     # 0 - Formata os dados d transacao
     request_data = request.get_json()
-    obj = {
-        id_usuario : request_data['remetente'],
-        valor : request_data['valor'],
-        status : request_data['status'],
-        id_transacao : request_data["id"],
-    }
 
     # 1 - Busca os validadores disponives
     
@@ -99,15 +94,16 @@ def validar():
     # 2 - Envia para os validadores disponiveis as informações recebidas pelos gerenciadores
     respostas = []
     for validador in validadores:
+        validador = validador.__dict__
         host_validador = validador["ip"]
-        resposta = requests.post(host_validador+"/validar",obj.json())
+        resposta = requests.post(host_validador+"/validar", request_data)
         respostas.append(resposta)
     # 4 - Verifica se o token retornado é o token gerado na criacao
     for resp in respostas:
         if resp["segredo"] != f"{SECRET}":
             return {"status":"2"}
 
-    # 4 - Retorna as informações para o gerenciador
+    # 5 - Retorna as informações para o gerenciador
     request_data = request.get_json()
     key = request_data['key']
     login = request_data['name']
@@ -118,4 +114,4 @@ def validar():
     return {"status":"2"}
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5001)
+    app.run(port=5001)
