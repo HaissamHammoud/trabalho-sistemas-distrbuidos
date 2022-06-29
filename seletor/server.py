@@ -98,23 +98,16 @@ def validar():
     validadores = Validador.query.all()
     # 2 - Envia para os validadores disponiveis as informações recebidas pelos gerenciadores
     respostas = []
+    validadores_maliciosos = []
     for validador in validadores:
         host_validador = validador["ip"]
         resposta = requests.post(host_validador+"/validar",obj.json())
-        respostas.append(resposta)
-    # 4 - Verifica se o token retornado é o token gerado na criacao
-    for resp in respostas:
-        if resp["segredo"] != f"{SECRET}":
-            return {"status":"2"}
-
+        if resposta.content["segredo"] != f"{SECRET}":
+            validadores_maliciosos.append(resposta.content["ip"])
+    
     # 4 - Retorna as informações para o gerenciador
-    request_data = request.get_json()
-    key = request_data['key']
-    login = request_data['name']
-    valor = request_data['valor']
-    print(login + str(valor) + login)
-    if key == login + str(valor) + login:
-        return {"status": "1"}
+    if validadores_maliciosos.count() > 0:
+        return {"status":"2"}
     return {"status":"2"}
 
 if __name__ == '__main__':
