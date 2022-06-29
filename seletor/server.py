@@ -7,7 +7,7 @@ import requests
 import json
 app = Flask(__name__)
 
-SECRET = "sergredosecreto"
+SECRET = "segredosecreto"
 
 initLogger()
 log("Iniciando a instancia")
@@ -27,27 +27,23 @@ def getHora():
     hora = request.get(url)
     return hora
 
-class Usuario(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    nome = db.Column(db.String(20), unique=False, nullable=False)
-    saldo = db.Column(db.Float())
-    def __repr__(self):
-        return f"{{Nome : {self.nome}, Saldo: {self.saldo} }}"
-
 class Validador(db.Model):
-    ip = db.Column(db.String(20), primary_key=True) 
+    id = db.Column(db.Integer, primary_key=True)
+    ip = db.Column(db.String(20), unique=True) 
+    nome = db.Column(db.String(20), unique=False, nullable=False)
     stack = db.Column(db.Float())
+    ativo = db.Column(db.Boolean())
 
     def __repr__(self):
-        return f"{{ ip: {self.ip}, stack: {self.stack } }}"
+        return f"{{nome: {self.nome} ip: {self.ip}, stack: {self.stack}, ativo: {self.ativo} }}"
 
 @app.route('/validador', methods=['POST'])
 def createValidador():
     request_data = request.get_json()
     _ip = request_data['ip']
-    _stack = 0
+    _nome = request_data['nome']
     try:
-        validador = Validador(ip = _ip, stack=_stack)
+        validador = Validador(nome = _nome, ip = _ip, stack=0, ativo=True)
         db.session.add(validador)
         db.session.commit() 
     except:
@@ -57,61 +53,122 @@ def createValidador():
             return {"status": "200", "secret": "segredosecreto"}
         else:
             return {"status": "400"}
-
+    log(f"Validador {_nome} cadastrado com sucesso")
     return {"status": "200", "secret": "segredosecreto", "Message": "Validador registrado com sucesso"}
 
 @app.route('/delete/<int:_id>', methods=['DELETE'])
 def deleteUser(_id):
-    usuario = Usuario.query.get(_id)
-    if usuario is None:
+    validador = Validador.query.get(_id)
+    if not validador:
         return {"status":"403", "message":"not found"}
-    db.session.delete(usuario)
+    db.session.delete(validador)
     db.session.commit()
     return {"status": "ok", "message":"Usuario removido com sucesso"}
     
+@app.route('/usercheck', methods=['POST'])
+def checkUser():
+    request_data = request.get_json()
+    _ip = request_data['ip']
+    validador = Validador.query.filter_by(ip=_ip).first()
+    if not validador:
+        return {"status":"400"}
+    return {"status":"200"}
 
-@app.route('/get/<int:_id>', methods=['GET'])
+@app.route('/user/<int:_id>', methods=['GET'])
 def getUser(_id):
-    usuario = Usuario.query.get(_id)
-
-    if usuario is None:
+    validador = Validador.query.get(_id)
+    if validador is None:
         return {"status":"403", "message":"not found"}
-    return str(usuario)
+    return str(validador)
 
-def elect(names, number_values):
-    print(number_values)
-    value = randint(0, number_values-1)
-    return value
+
+@app.route('/ativa', methods=['POST'])
+def ativaValidador():
+    request_data = request.get_json()
+    _ip = request_data['ip']
+    validador = Validador.query.filter_by(ip=_ip).first()
+    db.session.commit()
+    validador.ativo = True
+    db.session.commit()
+    log(f"Validador com ip: {_ip} agora esta ativado")
+    return {"secret": "segredosecreto"}
+
+@app.route('/user', methods=['GET'])
+def listaValidadores():
+    if(request.method == 'GET'):
+        validador = Validador.query.all()
+        return jsonify(str(validador))
+
+@app.route('/statusfinal', methods=['POST'])
+def recompensa():
+    request_data = request.get_json()
+    transacao_id = request_data['transacao']
+    status = request_data['status']
+    f = open("logs/transacao"+transacao_id)
+    resultados = json.load(f)
+    for resultado in resultados:
+        validador = Validador.query.filter_by(ip=resultado["ip"]).first()
+        if resultado["status"] == status:
+            validador.stack +=20
+        else:
+            validador.stack -=20
+    f.close()
+
 
 @app.route('/validar', methods=['POST'])
 def validar():
+    result = 0
     # 0 - Formata os dados d transacao
     request_data = request.get_json()
-
     # 1 - Busca os validadores disponives
     
-    validadores = Validador.query.all()
+    validadores = Validador.query.filter_by(ativo=True).all()
     # 2 - Envia para os validadores disponiveis as informações recebidas pelos gerenciadores
     respostas = []
-    for validador in validadores:
-        validador = validador.__dict__
-        host_validador = validador["ip"]
-        resposta = requests.post(host_validador+"/validar", request_data)
-        respostas.append(resposta)
-    # 4 - Verifica se o token retornado é o token gerado na criacao
-    for resp in respostas:
-        if resp["segredo"] != f"{SECRET}":
-            return {"status":"2"}
+    try:
+        for validador in validadores:
+            validador = validador.__dict__
+            host_validador = validador["ip"]
+            resposta = requests.post("http://"+host_validador+"/validar", json = request_data, timeout=20)
+            respostas.append(resposta.json())
+    except requests.Timeout:
+        pass
+    except requests.ConnectionError:
+        pass
 
+    # 4 - Verifica se o token retornado é o token gerado na criacao
+    f = open(f"logs/transacao{request_data['id']}.json", "a")
+    for resp in respostas:
+        print(resp)
+        if resp["segredo"] == SECRET:
+            if resp["status_transacao"] == "1":
+                result +=1
+            elif resp["status_transacao"] == "2":
+                result -=1
+            data = {
+                "ip": resp["ip"],
+                "status": resp["status_transacao"]
+            }
+        else:
+            data = {
+                "ip": resp["ip"],
+                "status": -1
+            }
+        
+        f.write(json.dumps(data))
+    f.close()
     # 5 - Retorna as informações para o gerenciador
-    request_data = request.get_json()
-    key = request_data['key']
-    login = request_data['name']
-    valor = request_data['valor']
-    print(login + str(valor) + login)
-    if key == login + str(valor) + login:
-        return {"status": "1"}
-    return {"status":"2"}
+    if result >=0: 
+        log("Transação concluida com status 1")
+        return "1"
+    else:
+        log("Transação concluida com status 2")
+        return "2"
 
 if __name__ == '__main__':
+    validadores = Validador.query.filter_by(ativo=True)
+    for validador in validadores:
+        validador.ativo = False
+        db.session.commit()
+    db.create_all()
     app.run(port=5001)

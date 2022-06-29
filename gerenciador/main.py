@@ -8,6 +8,9 @@ from dataclasses import dataclass
 from datetime import date, datetime
 import requests
   
+URL_SELETOR  = "http://localhost:5001"
+PORT="5000"
+
 app = Flask(__name__)
 
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///site.db'
@@ -55,7 +58,7 @@ class Transacao(db.Model):
     status = db.Column(db.Integer, unique=False, nullable=False)
 
     def __repr__(self):
-        return f"{{id : {self.id}, remetente: {self.remetente}, recebedor: {self.recebedor}, valor:{self.valor},horario: {self.horario}, status: {self.status} }} "
+        return f"{{id : {self.id}, remetente: {self.remetente}, recebedor: {self.recebedor}, valor:{self.valor},horario: {self.horario}, status: {self.status} }}"
 
 @app.before_first_request
 def create_tables():
@@ -64,6 +67,14 @@ def create_tables():
 @app.route("/")
 def index():
     return render_template('api.html')
+
+@app.route('/trabalha', methods = ['POST'])
+def MandaSeletorTrabalha():
+    if(request.method == 'POST'):
+        request_data = request.get_json()
+        transacao_id = request_data['transacao_id']
+        resposta = requests.post("http://localhost:5001/validar", json = (requests.get("http://localhost:"+PORT+"/transacoes/"+str(transacao_id)).json()))
+        return {"message": "Trabalho enviado com sucesso", "resposta": resposta.json()}
 
 @app.route('/seletor', methods = ['GET'])
 def ListarSeletor():
@@ -151,7 +162,15 @@ def CriaTransacao(rem, reb, valor):
 def UmaTransacao(id):
     if(request.method == 'GET'):
         objeto = Transacao.query.get(id)
-        return jsonify(str(objeto))
+        obj = {
+            "id": objeto.id,
+            "remetente": objeto.remetente,
+            "recebedor": objeto.recebedor,
+            "valor": objeto.valor,
+            "horario": objeto.horario.strftime("%m/%d/%Y, %H:%M:%S"),
+            "status" : objeto.status
+        }
+        return jsonify(obj)
     else:
         return jsonify(['Method Not Allowed'])
 
@@ -164,7 +183,15 @@ def EditaTransacao(id, status):
             objeto.id = id
             objeto.status = status
             db.session.commit()
-            return jsonify(str(objeto))
+            
+            data={
+                "transacao": id,
+                "status": status
+            }
+            requests.post(URL_SELETOR+"/statusfinal", json = data)
+
+            return jsonify({"message": "status alterado com sucesso"})
+
         except Exception as e:
             data={
                 "message": "transação não atualizada"
@@ -209,4 +236,4 @@ def page_not_found(error):
 
 if __name__ == "__main__":
     db.create_all()
-    app.run(host='0.0.0.0')
+    app.run(host='0.0.0.0', port=5000)
