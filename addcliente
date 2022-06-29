@@ -1,0 +1,1 @@
+curl -d '{"nome":"haissampobre", "senha":"senha", "qtdMoeda":"0"}' -H "Content-Type: application/json" -X POST http://localhost:5000/addcliente

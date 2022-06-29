@@ -157,15 +157,15 @@ def validar():
     # 5 - Retorna as informações para o gerenciador
     if result >=0: 
         log("Transacao concluida com status 1")
-        return "1"
+        return jsonify([{"valor":"1"}])
     else:
         log("Transacao concluida com status 2")
-        return "2"
+        return jsonify([{"valor":"2"}])
 
 if __name__ == '__main__':
+    db.create_all()
     validadores = Validador.query.filter_by(ativo=True)
     for validador in validadores:
         validador.ativo = False
-        db.session.commit()
-    db.create_all()
+        db.session.commit() 
     app.run(port=5001)

@@ -147,13 +147,18 @@ def ListarTransacoes():
         transacoes = Transacao.query.all()
         return jsonify(str(transacoes))
     
-    
+def MandaSeletorTrabalhar(transacao_id):
+        resposta = requests.post("http://localhost:5001/validar", json = (requests.get("http://localhost:"+PORT+"/transacoes/"+str(transacao_id)).json()))
+        return {"message": "Trabalho enviado com sucesso", "status_final": resposta}
+
 @app.route('/transacoes/<int:rem>/<int:reb>/<int:valor>', methods = ['POST'])
 def CriaTransacao(rem, reb, valor):
     if request.method=='POST':
         objeto = Transacao(remetente=rem, recebedor=reb,valor=valor,status=0,horario=datetime.now())
         db.session.add(objeto)
         db.session.commit()
+        objeto.query
+        MandaSeletorTrabalhar(objeto.id)
         return jsonify(str(objeto))
     else:
         return jsonify(['Method Not Allowed'])

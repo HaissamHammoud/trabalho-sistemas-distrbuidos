@@ -25,6 +25,18 @@ db = SQLAlchemy(app)
 migrate = Migrate(app, db)
 url = URL_SELETOR 
 
+
+@app.before_first_request
+def create_tables():
+    db.create_all()
+
+
+class usuarioBloqueado(db.Model):
+    id: int
+
+    id = db.Column(db.Integer, primary_key=True)
+    desbloqueio = db.Column(db.DateTime, unique=False, nullable=False)
+    nbloqueios = db.Column(db.Integer, nullable=False)
 def connectToSeletor(url, numberOfTry=0, maxRetry = 3):
     global SECRET_TO_SELETOR
     url_to_seletor = HOST+":"+str(PORT)
@@ -102,26 +114,58 @@ def saldoValido(valorTransacao, idUsuario):
 def comportamentoValido(id_usuario):
         endpoint = URL_GERENCIADOR + f"/transacoes"
         tempo = datetime.now() - timedelta(minutes=5)
-
+        log("Verificando comportamento invalido")
         response = requests.get(endpoint)
         response_json = response.json()
         response_json = response_json[1:-1]
         responses = response_json.split(" , ")
-
-        transacoes_usuario = 0
-        transacoes_status = 0
+        log("AAAAaaaAAAAaaaaAAAAaaa")
+        transacoes_usuario = []
+        transacoes_status = []
         transacoes_usuario = [transacoes_usuario+1 for transacoes in responses if (transacoes[(transacoes.find("remetente: ") + 11):(transacoes.find(",",transacoes.find("remetente: ") + 11))]) == id_usuario and (transacoes[(transacoes.find("horario: ") + 9):(transacoes.find(",",transacoes.find("horario: ") + 9))]) > tempo ]
         transacoes_status = [transacoes_status+1 for transacoes in transacoes_usuario if (transacoes[(transacoes.find("status: ") + 8):(transacoes.find(",",transacoes.find("status: ") + 8))]) != 1]
-
+            
         if len(transacoes_status) >= 4 :
             return False
         else:
             return True
 
+def banido(id_usuario):
+    usuario = (usuarioBloqueado.query.filter_by(id=id_usuario))
+    if usuario is not None:
+        return False
+    else:
+        if usuario.desbloqueio <= DateTime.now():
+            usuario.delete()
+            db.commit()
+            log(f"Usuario {id_usuario} ja esta Banido")
+            return False
+        return True
 
 def banirUsuario(motivo, transacao):
     id_usuario = transacao["remetente"]
     id_transacao = transacao["id"]
+    if (Seletor.query.filter_by(id=id_usuario).first()) is not None:
+        usuario = (usuarioBloqueado.query.filter_by(id=id).first())
+        usuario.nbloqueios = usuario.nbloqueios + 1
+        usuario.desbloqueio = usuario.desbloqueio + timedelta(0,(5 * usuario.nbloqueios))
+        db.session.commit()
+        log(f"Usuario {id_usuario} Banido")
+        return 1
+    else:
+        _id = id_usuario
+        _bloqueio = datetime.now() + timedelta(0,5)
+        _nbloqueios = 1
+        usuario = usuarioBloqueado(
+            id = id_usuario, 
+            bloqueio = datetime.now(),
+            nbloqueios = _nbloqueios)
+        db.session.add(usuario)
+        db.session.commit()
+        logger.log(f"Usuario {id_usuario} Banido")
+        return 1
+
+    usuario = usuarioBloqueado(id = id_usuario, desbloqueio= datetime.now())
     ## Essa função devera banir o usuario dependendo da infracao cometida
     log(f"Tempo passado pelo usuario de id {id_usuario} para transacao {id_transacao} e invalido","WARN")
     log(f"Usuario de id: {id_usuario} banido por: 20 sec","WARN")
@@ -133,27 +177,33 @@ def aprovarTransacao(transacao):
 
 @app.route('/validar', methods=['POST'])
 def validar():
-
     request_data = request.get_json()
     if request_data["status"] != 0:
         return jsonify({"status": "403", "message": "Transacao ja foi realizada","status_transacao": "2", "segredo": SECRET_TO_SELETOR, "ip": HOST+":"+str(PORT)})
-
     horario = request_data['horario']
     valor = request_data['valor']
     id_usuario = request_data['remetente']
     log(f"validar: Usuario de id {id_usuario} valor: {valor}")
-    if not saldoValido(valor, id_usuario):
-        banirUsuario("saldo invalido",request_data)
-        return jsonify({"status": "403", "message": "Saldo insuficiente","status_transacao": "2", "segredo": SECRET_TO_SELETOR, "ip": HOST+":"+str(PORT)}) 
-    if not horarioValido(horario):
-        banirUsuario("Tempo invalido",request_data)
-        return jsonify({"status": "403", "message": "horario invalido", "status_transacao": "2", "segredo": SECRET_TO_SELETOR, "ip": HOST+":"+str(PORT)})
+    if banido(id_usuario):
+        if not comportamentoValido(id_usuario):
+            banirUsuario("comportamento invalido",request_data)
+            log(f"usuario {id_usuario} esta banidoe teve seu tempo de espera aumentado")
+            return jsonify({"status": "403", "message": "comportamento suspeito", "status_transacao": "2", "segredo": SECRET_TO_SELETOR})
+        return jsonify({"status": "403", "message": "Usuario esta banido temoporariamente", "status_transacao": "2", "segredo": SECRET_TO_SELETOR})
     if not comportamentoValido(id_usuario):
         banirUsuario("comportamento invalido",request_data)
         return jsonify({"status": "403", "message": "comportamento suspeito", "status_transacao": "2", "segredo": SECRET_TO_SELETOR})
+    if not saldoValido(valor, id_usuario):
+        log(f"usuario {id_usuario} não possui saldo para efetuar transacao")
+        return jsonify({"status": "403", "message": "Saldo insuficiente","status_transacao": "2", "segredo": SECRET_TO_SELETOR, "ip": HOST+":"+str(PORT)}) 
+    if not horarioValido(horario):
+        return jsonify({"status": "403", "message": "horario invalido", "status_transacao": "2", "segredo": SECRET_TO_SELETOR, "ip": HOST+":"+str(PORT)})
+    
 
     aprovarTransacao(request_data)
+    logger.log(f"transacao aprovada")
     return jsonify({"status": "200", "status_transacao": "1", "segredo": SECRET_TO_SELETOR, "ip": HOST+":"+str(PORT)})
 
 if __name__ == '__main__':
+    db.create_all()
     app.run(port=PORT)
