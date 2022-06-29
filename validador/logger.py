@@ -6,7 +6,7 @@ INSTANCE_TIME = os.environ.get('START_TIME')
 def initLogger():
     print("init logger")
     os.environ['START_TIME'] = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
-    time.sleep(5)
+    time.sleep(1)
 
 def log (menssagem, nivel="INFO"):
     INSTANCE_TIME=os.environ.get('START_TIME')
