@@ -11,8 +11,8 @@ URL_GERENCIADOR ="http://localhost:5000"
 URL_SELETOR  = "http://localhost:5001"
 SECRET_TO_SELETOR= ""
 HOST = "127.0.0.1"
-PORT = 5019
-NOME = "JOAO"
+PORT = 5020
+NOME = "MANOEL"
 app = Flask(__name__)
 
 #indica o tempo de inicialização da instância
@@ -136,7 +136,7 @@ def validar():
 
     request_data = request.get_json()
     if request_data["status"] != 0:
-        return jsonify({"status": "403", "message": "Transacao ja foi realizada","status_transacao": "2"})
+        return jsonify({"status": "403", "message": "Transacao ja foi realizada","status_transacao": "2", "segredo": SECRET_TO_SELETOR, "ip": HOST+":"+str(PORT)})
 
     horario = request_data['horario']
     valor = request_data['valor']

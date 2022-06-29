@@ -74,7 +74,7 @@ def MandaSeletorTrabalha():
         request_data = request.get_json()
         transacao_id = request_data['transacao_id']
         resposta = requests.post("http://localhost:5001/validar", json = (requests.get("http://localhost:"+PORT+"/transacoes/"+str(transacao_id)).json()))
-        return {"message": "Trabalho enviado com sucesso", "resposta": resposta.json()}
+        return {"message": "Trabalho enviado com sucesso", "status_final": resposta.json()}
 
 @app.route('/seletor', methods = ['GET'])
 def ListarSeletor():

@@ -104,24 +104,28 @@ def recompensa():
     request_data = request.get_json()
     transacao_id = request_data['transacao']
     status = request_data['status']
-    f = open("logs/transacao"+transacao_id)
-    resultados = json.load(f)
-    for resultado in resultados:
-        validador = Validador.query.filter_by(ip=resultado["ip"]).first()
-        if resultado["status"] == status:
-            validador.stack +=20
-        else:
-            validador.stack -=20
+    f = open("logs/transacao"+str(transacao_id)+".txt", "r")
+    resultados = f.read().split("\n")
+    del resultados[-1]
+    for result in resultados:
+        resultado = json.loads(result)
+        validadores = Validador.query.filter_by(ip=resultado["ip"]).all()
+        for validador in validadores:
+            if str(resultado["status"]) == str(status):
+                validador.stack +=20
+            else:
+                validador.stack -=20
+            db.session.commit()
     f.close()
+    return {"mensagem": "Alterado com sucesso"}
 
 
 @app.route('/validar', methods=['POST'])
 def validar():
     result = 0
-    # 0 - Formata os dados d transacao
+    # 0 - Formata os dados da transacao
     request_data = request.get_json()
     # 1 - Busca os validadores disponives
-    
     validadores = Validador.query.filter_by(ativo=True).all()
     # 2 - Envia para os validadores disponiveis as informações recebidas pelos gerenciadores
     respostas = []
@@ -132,37 +136,30 @@ def validar():
             resposta = requests.post("http://"+host_validador+"/validar", json = request_data, timeout=20)
             respostas.append(resposta.json())
     except requests.Timeout:
-        pass
+        log(f"Timeout na conecção do validador com ip {host_validador}")
     except requests.ConnectionError:
-        pass
+        log(f"Conecção interrompida no validador com ip {host_validador}")
 
     # 4 - Verifica se o token retornado é o token gerado na criacao
-    f = open(f"logs/transacao{request_data['id']}.json", "a")
+    f = open(f"logs/transacao{request_data['id']}.txt", "a")
     for resp in respostas:
-        print(resp)
         if resp["segredo"] == SECRET:
             if resp["status_transacao"] == "1":
                 result +=1
             elif resp["status_transacao"] == "2":
                 result -=1
-            data = {
-                "ip": resp["ip"],
-                "status": resp["status_transacao"]
-            }
+            data = '{"ip": "'+resp["ip"]+'","status": "'+ resp["status_transacao"]+'"}'
         else:
-            data = {
-                "ip": resp["ip"],
-                "status": -1
-            }
+            data = '{"ip": "'+resp["ip"]+'","status": -1}'
         
-        f.write(json.dumps(data))
+        f.write(data+"\n")
     f.close()
     # 5 - Retorna as informações para o gerenciador
     if result >=0: 
-        log("Transação concluida com status 1")
+        log("Transacao concluida com status 1")
         return "1"
     else:
-        log("Transação concluida com status 2")
+        log("Transacao concluida com status 2")
         return "2"
 
 if __name__ == '__main__':
